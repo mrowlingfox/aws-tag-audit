@@ -5,6 +5,7 @@ from os import path
 from os import makedirs
 import json
 import yaml
+from validate_email import validate_email
 
 
 REGION_NAME="ap-southeast-2"
@@ -95,6 +96,14 @@ class TaggingApi():
 STANDARD_TAGS=['Name', 'Environment','Project','Department','Contact','Management','MonitoringFlag']
 REQUIRED_TAGS=['Name', 'Environment','Project','Department','Contact']
 
+def is_valid_email(email):
+    return validate_email(email_address=email, check_regex=True, check_mx=True, from_address='my@from.addr.ess', helo_host='my.host.name', smtp_timeout=10, dns_timeout=10, use_blacklist=True, debug=False)
+
+def get_invalid_standard_tag_values(standard_tags_values):
+    invalid_values = {}
+    contacts = standard_tags_values.get('Contact')
+    invalid_contacts = [contact for contact in contacts if not is_valid_email(contact)]
+    invalid_values['Contact'] = invalid_contacts
 
 
 def get_missing_required_tags(resources):
@@ -118,6 +127,7 @@ def main():
         resources = api.get_resources()
         standard_tags_values = { tag: keys_with_values.get(tag) for tag in STANDARD_TAGS }
         missing_required_tags = get_missing_required_tags(resources)
+        invalid_standard_tag_values = get_invalid_standard_tag_values(standard_tags_values)
         output_dir = 'output'
         if not path.isdir(output_dir):
             makedirs(output_dir)
