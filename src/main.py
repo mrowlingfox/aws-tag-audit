@@ -102,7 +102,7 @@ def main():
         api = TaggingApi(session)
         keys_with_values = api.get_keys_with_values()
         resources = api.get_resources()
-        STANDARD_TAGS_values = { tag: keys_with_values.get(tag) for tag in STANDARD_TAGS }
+        standard_tags_values = { tag: keys_with_values.get(tag) for tag in STANDARD_TAGS }
         output_dir = 'output'
         if not path.isdir(output_dir):
             makedirs(output_dir)
@@ -110,8 +110,8 @@ def main():
             yaml.dump(keys_with_values, file)
         with open(f'{output_dir}/{profile}_resources.yaml', 'w') as file:
             yaml.dump(resources, file)
-        with open(f'{output_dir}/{profile}_STANDARD_TAGS_values.yaml', 'w') as file:
-            yaml.dump(STANDARD_TAGS_values, file)
+        with open(f'{output_dir}/{profile}_standard_tags_values.yaml', 'w') as file:
+            yaml.dump(standard_tags_values, file)
 
 
 if __name__ == "__main__":
