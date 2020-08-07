@@ -93,7 +93,21 @@ class TaggingApi():
         return results
 
 STANDARD_TAGS=['Name', 'Environment','Project','Department','Contact','Management','MonitoringFlag']
+REQUIRED_TAGS=['Name', 'Environment','Project','Department','Contact']
 
+
+
+def get_missing_required_tags(resources):
+    missing_tags = {}
+    for resource in resources:
+        tags = resource.get('Tags')
+        arn = resource.get('ResourceARN')
+        required_tags = list(filter(lambda d: d['Key'] in REQUIRED_TAGS, tags))
+        required_tags_keys = [t['Key'] for t in required_tags]
+        missing_required_tags = [d for d in REQUIRED_TAGS if d not in required_tags_keys]
+        if len(missing_required_tags) > 0:
+            missing_tags[arn] = missing_required_tags
+    return missing_tags
 
 def main():
     profiles=["foxsports-gitops-dev"]
@@ -103,15 +117,14 @@ def main():
         keys_with_values = api.get_keys_with_values()
         resources = api.get_resources()
         standard_tags_values = { tag: keys_with_values.get(tag) for tag in STANDARD_TAGS }
+        missing_required_tags = get_missing_required_tags(resources)
         output_dir = 'output'
         if not path.isdir(output_dir):
             makedirs(output_dir)
-        with open(f'{output_dir}/{profile}_key_values.yaml', 'w') as file:
-            yaml.dump(keys_with_values, file)
-        with open(f'{output_dir}/{profile}_resources.yaml', 'w') as file:
-            yaml.dump(resources, file)
         with open(f'{output_dir}/{profile}_standard_tags_values.yaml', 'w') as file:
             yaml.dump(standard_tags_values, file)
+        with open(f'{output_dir}/{profile}_missing_required_tags.yaml', 'w') as file:
+            yaml.dump(missing_required_tags, file)
 
 
 if __name__ == "__main__":
