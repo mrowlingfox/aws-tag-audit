@@ -101,9 +101,15 @@ def is_valid_email(email):
 
 def get_invalid_standard_tag_values(standard_tags_values):
     invalid_values = {}
-    contacts = standard_tags_values.get('Contact')
+    contacts = standard_tags_values.get('Contact',[])
     invalid_contacts = [contact for contact in contacts if not is_valid_email(contact)]
-    invalid_values['Contact'] = invalid_contacts
+    if len(invalid_contacts) > 0:
+        invalid_values['Contact'] = invalid_contacts
+    
+    environments = standard_tags_values.get('Environments',[])
+    invalid_environment = [env for env in environments if env not ['staging','production', 'dev']]
+    if len(invalid_environment) > 0:
+        invalid_values['Environments'] = invalid_environment
 
 
 def get_missing_required_tags(resources):
