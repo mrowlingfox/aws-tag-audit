@@ -97,19 +97,21 @@ STANDARD_TAGS=['Name', 'Environment','Project','Department','Contact','Managemen
 REQUIRED_TAGS=['Name', 'Environment','Project','Department','Contact']
 
 def is_valid_email(email):
-    return validate_email(email_address=email, check_regex=True, check_mx=True, from_address='my@from.addr.ess', helo_host='my.host.name', smtp_timeout=10, dns_timeout=10, use_blacklist=True, debug=False)
+    return validate_email(email_address=email, check_regex=True, check_mx=False, use_blacklist=True, debug=False)
 
 def get_invalid_standard_tag_values(standard_tags_values):
     invalid_values = {}
     contacts = standard_tags_values.get('Contact',[])
-    invalid_contacts = [contact for contact in contacts if not is_valid_email(contact)]
-    if len(invalid_contacts) > 0:
-        invalid_values['Contact'] = invalid_contacts
+    if contacts is not None:
+        invalid_contacts = [contact for contact in contacts if not is_valid_email(contact)]
+        if len(invalid_contacts) > 0:
+            invalid_values['Contact'] = invalid_contacts
     
     environments = standard_tags_values.get('Environments',[])
-    invalid_environment = [env for env in environments if env not ['staging','production', 'dev']]
-    if len(invalid_environment) > 0:
-        invalid_values['Environments'] = invalid_environment
+    if environments is not None:
+        invalid_environment = [env for env in environments if env not in ['staging','production', 'dev']]
+        if len(invalid_environment) > 0:
+            invalid_values['Environments'] = invalid_environment
 
 
 def get_missing_required_tags(resources):
@@ -124,23 +126,62 @@ def get_missing_required_tags(resources):
             missing_tags[arn] = missing_required_tags
     return missing_tags
 
+def write_to_yaml(profile, **kwargs):
+    output_dir = 'output'
+    if not path.isdir(output_dir):
+        makedirs(output_dir)
+    for key, value in kwargs.items():
+        with open(f'{output_dir}/{profile}_{key}.yaml', 'w') as file:
+            yaml.dump(value, file)
+
+def get_profiles():
+    session = boto3.session.Session(region_name=REGION_NAME)
+    exclude_list = [
+        "okta", 
+        "gitops", 
+        "martian-ott-nonprod", 
+        "martian-ott-prod", 
+        "foxsports-shared-services", 
+        "dev", 
+        "foxsports-olympus-nonprod", 
+        "foxsports-olympus-prod"
+    ]
+    profiles = [ p for p in session.available_profiles if p not in exclude_list]
+    return profiles
+
+def get_regions():
+    ec2 = boto3.client('ec2')
+    response = ec2.describe_regions()
+    regions = response['Regions']
+    return [ region.get("RegionName") for region in regions ]
+
+
 def main():
-    profiles=["foxsports-gitops-dev"]
+    profiles = get_profiles()
+    regions = get_regions()
     for profile in profiles:
-        session = boto3.session.Session(profile_name=profile, region_name=REGION_NAME)
-        api = TaggingApi(session)
-        keys_with_values = api.get_keys_with_values()
-        resources = api.get_resources()
-        standard_tags_values = { tag: keys_with_values.get(tag) for tag in STANDARD_TAGS }
-        missing_required_tags = get_missing_required_tags(resources)
-        invalid_standard_tag_values = get_invalid_standard_tag_values(standard_tags_values)
-        output_dir = 'output'
-        if not path.isdir(output_dir):
-            makedirs(output_dir)
-        with open(f'{output_dir}/{profile}_standard_tags_values.yaml', 'w') as file:
-            yaml.dump(standard_tags_values, file)
-        with open(f'{output_dir}/{profile}_missing_required_tags.yaml', 'w') as file:
-            yaml.dump(missing_required_tags, file)
+        for region in regions:
+            try:
+                print("=== ", profile, " === ", region, " ===")
+                session = boto3.session.Session(profile_name=profile, region_name=region)
+                api = TaggingApi(session)
+                keys_with_values = api.get_keys_with_values()
+                resources = api.get_resources()
+                missing_required_tags = get_missing_required_tags(resources)
+                write_to_yaml(f'{profile}_{region}',
+                    missing_required_tags=missing_required_tags,
+                )
+                standard_tags_values = { tag: keys_with_values.get(tag) for tag in STANDARD_TAGS }
+                if standard_tags_values:
+                    invalid_standard_tag_values = get_invalid_standard_tag_values(standard_tags_values)
+                    write_to_yaml(f'{profile}_{region}',
+                        standard_tags_values=standard_tags_values,
+                        invalid_standard_tag_values=invalid_standard_tag_values,
+                    )
+            except Exception as identifier:
+                error_code = identifier.response.get("Error", {}).get("Code")
+                if error_code != "AccessDeniedException":
+                    print("Exception Profile: ", profile, region, identifier)
 
 
 if __name__ == "__main__":
